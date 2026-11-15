@@ -1,0 +1,8 @@
+# Android module scripts/props must stay LF on every checkout.
+module/**/*.sh text eol=lf
+module/**/*.prop text eol=lf
+module/**/*.xml text eol=lf
+module/config text eol=lf
+module/META-INF/com/google/android/updater-script text eol=lf
+module/META-INF/com/google/android/update-binary text eol=lf
+tools/**/*.py text eol=lf

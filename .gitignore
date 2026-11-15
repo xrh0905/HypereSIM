@@ -8,3 +8,7 @@
 # Python
 __pycache__/
 *.py[cod]
+
+# 模块构建产物
+/build/
+/outputs/

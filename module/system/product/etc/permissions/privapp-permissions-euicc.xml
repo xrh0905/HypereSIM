@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="com.miui.euicc">
+        <permission name="android.permission.MODIFY_PHONE_STATE" />
+        <permission name="android.permission.WRITE_EMBEDDED_SUBSCRIPTIONS" />
+        <permission name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
+        <permission name="android.permission.WRITE_SECURE_SETTINGS" />
+        <permission name="android.permission.BIND_EUICC_SERVICE" />
+        <permission name="android.permission.SECURE_ELEMENT_PRIVILEGED_OPERATION" />
+        <permission name="android.permission.USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER" />
+    </privapp-permissions>
+</permissions>

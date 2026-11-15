@@ -1,0 +1,18 @@
+#!/sbin/sh
+umask 022
+
+ui_print() { echo "$1"; }
+
+OUTFD=$2
+ZIPFILE=$3
+
+# KernelSU/SukiSU/APatch managers run their own installer and never reach this
+# script. This path exists for Magisk-compatible installers only.
+if [ -f /data/adb/magisk/util_functions.sh ]; then
+  . /data/adb/magisk/util_functions.sh
+  install_module
+  exit 0
+fi
+
+ui_print "! Flash this ZIP from KernelSU, SukiSU, APatch, or Magisk while Android is running."
+exit 1
