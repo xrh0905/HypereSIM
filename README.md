@@ -62,10 +62,10 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
    `com.android.phone` 与 `com.miui.euicc`。
 4. 重启。
 5. 在系统设置中打开 eSIM，正常写卡/启用 profile。
-6. `LPA:1$...` 激活链接由 APK 内的 `LpaBridgeActivity` 转交小米 LPA。该 ROM 意外自带了
-   Google `com.google.android.euicc`（数据应用，缺特权电话权限，`QrDownloadActivity`
-   启动即崩）并抢占 `LPA` scheme，需移除：`pm uninstall com.google.android.euicc`。
-   若 Play/GMS 之后把它装回，重复一次即可；是否改用并授权该组件另行评估。
+6. 该 ROM 意外自带了 Google `com.google.android.euicc`（数据应用，缺特权电话权限，
+   `QrDownloadActivity` 启动即崩）并抢占 `LPA` scheme，需移除：
+   `pm uninstall com.google.android.euicc`。若 Play/GMS 之后把它装回，重复一次。
+   链接方式的激活入口当前由应用层之外的方案处理。
 
 升级 zip 与 APK 时保持两者版本一致。卸载 zip 模块会移除 `/product`、`/vendor` 覆盖与
 `system.prop`，不改 `Settings.Secure`，不删 profile，也不卸载 LSPosed 模块。
