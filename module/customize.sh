@@ -28,7 +28,7 @@ fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/system" 0 0 0755 0644 u:object_r:system_file:s0
-for script in common.sh customize.sh post-fs-data.sh service.sh action.sh uninstall.sh; do
+for script in common.sh customize.sh service.sh action.sh uninstall.sh; do
   set_perm "$MODPATH/$script" 0 0 0755
 done
 set_perm "$MODPATH/META-INF/com/google/android/update-binary" 0 0 0755

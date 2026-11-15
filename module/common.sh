@@ -13,14 +13,6 @@ logmsg() {
   log -t HypereSIM "$1" >/dev/null 2>&1 || true
 }
 
-read_mode() {
-  MODE=on
-  if [ -f "$MODDIR/config" ]; then
-    value=$(sed -n 's/^MODE=//p' "$MODDIR/config" | tail -n 1)
-    [ "$value" = off ] && MODE=off
-  fi
-}
-
 wait_boot_completed() {
   n=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$n" -lt 180 ]; do

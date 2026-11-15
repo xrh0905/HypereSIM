@@ -67,12 +67,10 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
 `uninstall.sh` 只清理 `/data/adb/hyperesim` 诊断目录，不改 `Settings.Secure`，不删 profile，
 也不卸载 LSPosed 模块。
 
-## 模式与诊断
+## 诊断
 
-`module/config` 的 `MODE=on|off` 控制 `skip_mount`：
-
-- `on`（默认）：应用 `/product`、`/vendor` 覆盖。
-- `off`：下次启动不挂载任何覆盖，便于对比原厂行为。
+停用模块直接用 Root 管理器的模块开关（KernelSU 的 `disable` 文件），不需要额外脚本：
+关闭后 `/product`、`/vendor` 覆盖与 `system.prop` 都不再生效。
 
 诊断入口：
 

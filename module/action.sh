@@ -4,8 +4,6 @@
 MODDIR=${0%/*}
 . "$MODDIR/common.sh"
 
-read_mode
-
 path=$(lpa_path)
 version=$(lpa_version)
 flags=$(lpa_flags)
@@ -15,7 +13,6 @@ features=$(euicc_features)
 [ -n "$features" ] || features="(none)"
 
 echo "HypereSIM v0.1.0"
-echo "mode=$MODE"
 echo "lpa_apk=$LPA_APK"
 echo "lpa_path=${path:-none}"
 echo "lpa_version=${version:-none}"

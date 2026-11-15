@@ -5,8 +5,6 @@
 MODDIR=${0%/*}
 . "$MODDIR/common.sh"
 
-read_mode
-[ "$MODE" = on ] || exit 0
 wait_boot_completed || exit 0
 
 mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -33,7 +31,6 @@ logmsg "$message"
 
 {
   echo "time=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)"
-  echo "mode=$MODE"
   echo "lpa_apk_present=$apk_present"
   echo "lpa_perm_present=$perm_present"
   echo "lpa_path=$path"

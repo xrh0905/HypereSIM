@@ -1,0 +1,3 @@
+# HyperOS Settings gates the eSIM entry on this vendor property; the CN ROM
+# does not set it even though the LPA is present.
+ro.vendor.miui.support_esim=true
