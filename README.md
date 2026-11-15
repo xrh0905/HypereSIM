@@ -63,9 +63,8 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
 4. 重启。
 5. 在系统设置中打开 eSIM，正常写卡/启用 profile。
 
-升级 zip 与 APK 时保持两者版本一致。卸载 zip 模块会移除 `/product`、`/vendor` 覆盖；
-`uninstall.sh` 只清理 `/data/adb/hyperesim` 诊断目录，不改 `Settings.Secure`，不删 profile，
-也不卸载 LSPosed 模块。
+升级 zip 与 APK 时保持两者版本一致。卸载 zip 模块会移除 `/product`、`/vendor` 覆盖与
+`system.prop`，不改 `Settings.Secure`，不删 profile，也不卸载 LSPosed 模块。
 
 ## 诊断
 
@@ -74,19 +73,20 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
 
 诊断入口：
 
-- Root 管理器的模块 Action 按钮：打印 LPA 路径、版本、`SYSTEM` 标志、eUICC 特性、
-  近期 `Euicc-` 日志。
-- `/data/adb/hyperesim/last.log`：`service.sh` 在开机完成后写入的只读快照。
+- Root 管理器的模块 Action 按钮：现场打印 LPA 路径、版本、`SYSTEM` 标志、eUICC 特性、
+  近期 `Euicc-` 日志；不落盘。
+- hook 行为：`logcat | grep HypereSIM`，或 LSPosed 日志
+  `/data/adb/lspd/log/modules_*.log`。
 
 ## 构建
 
 ```bash
 python tools/build_module.py
-# outputs/HypereSIM-v0.2.0.zip
+# outputs/HypereSIM-<version>.zip
 # build/module/ 为可检查的暂存模块树
 
 python tools/build_lsposed.py --offline
-# outputs/HypereSIM-LSPosed-v0.2.0.apk
+# outputs/HypereSIM-LSPosed-<version>.apk
 
 python tools/build_lsposed.py --offline --debug
 # outputs/HypereSIM-LSPosed-v0.2.0-debug.apk（debug 签名）

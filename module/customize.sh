@@ -28,11 +28,12 @@ fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/system" 0 0 0755 0644 u:object_r:system_file:s0
-for script in common.sh customize.sh service.sh action.sh uninstall.sh; do
+for script in common.sh customize.sh action.sh; do
   set_perm "$MODPATH/$script" 0 0 0755
 done
 set_perm "$MODPATH/META-INF/com/google/android/update-binary" 0 0 0755
 
-ui_print "- HypereSIM v0.1.0: privileged LPA payload, privapp allowlist, MEP unavailable-feature."
+VERSION=$(sed -n 's/^version=//p' "$MODPATH/module.prop" | head -n 1)
+ui_print "- HypereSIM ${VERSION:-unknown}: privileged LPA payload, privapp allowlist, MEP unavailable-feature."
 ui_print "- Behaviour hooks are provided by the separate LSPosed module; enable it before toggling eSIM."
 ui_print "- Reboot to activate the /product and /vendor overlays."

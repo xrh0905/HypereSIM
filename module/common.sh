@@ -1,26 +1,11 @@
 #!/system/bin/sh
-# Shared helpers for HypereSIM. Sourced by the installer and boot/action scripts.
+# Shared helpers for HypereSIM. Sourced by the installer and the Action button.
 # Read-only: nothing here writes system state.
 
 MODDIR=${MODDIR:-${0%/*}}
-STATE_DIR=${STATE_DIR:-/data/adb/hyperesim}
 LPA_PKG=${LPA_PKG:-com.miui.euicc}
 LPA_APK=${LPA_APK:-/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk}
 LPA_PERM_XML=${LPA_PERM_XML:-/product/etc/permissions/privapp-permissions-euicc.xml}
-
-logmsg() {
-  echo "$1"
-  log -t HypereSIM "$1" >/dev/null 2>&1 || true
-}
-
-wait_boot_completed() {
-  n=0
-  while [ "$(getprop sys.boot_completed 2>/dev/null)" != 1 ] && [ "$n" -lt 180 ]; do
-    sleep 1
-    n=$((n + 1))
-  done
-  [ "$(getprop sys.boot_completed 2>/dev/null)" = 1 ]
-}
 
 lpa_path() {
   pm path "$LPA_PKG" 2>/dev/null | sed -n 's/^package://p' | head -n 1

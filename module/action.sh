@@ -12,7 +12,8 @@ lpa_is_system && system_ok=true
 features=$(euicc_features)
 [ -n "$features" ] || features="(none)"
 
-echo "HypereSIM v0.1.0"
+VERSION=$(sed -n 's/^version=//p' "$MODDIR/module.prop" | head -n 1)
+echo "HypereSIM ${VERSION:-unknown}"
 echo "lpa_apk=$LPA_APK"
 echo "lpa_path=${path:-none}"
 echo "lpa_version=${version:-none}"

@@ -32,9 +32,7 @@ REQUIRED = {
     "module.prop",
     "common.sh",
     "customize.sh",
-    "service.sh",
     "action.sh",
-    "uninstall.sh",
     "system/product/etc/permissions/privapp-permissions-euicc.xml",
     "system/product/etc/permissions/android.hardware.telephony.euicc.xml",
     "system/vendor/etc/permissions/zz_hyperesim_mep.xml",
@@ -45,9 +43,7 @@ EXECUTABLE = {
     "META-INF/com/google/android/update-binary",
     "common.sh",
     "customize.sh",
-    "service.sh",
     "action.sh",
-    "uninstall.sh",
 }
 
 XML_FILES = {
