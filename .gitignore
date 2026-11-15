@@ -1,0 +1,10 @@
+# 本地产物：反编译结果、二进制与上游克隆（体积大、可由 work/MIUIEsimLPA.apk 重建）
+/work/MIUIEsimLPA.apk
+/work/jadx/
+/work/analysis/
+/work/prior/out-lpa-4.0.2.1/
+/work/repo/
+
+# Python
+__pycache__/
+*.py[cod]
