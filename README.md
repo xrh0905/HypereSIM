@@ -82,14 +82,14 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
 
 ```bash
 python tools/build_module.py
-# outputs/HypereSIM-v0.1.0.zip
+# outputs/HypereSIM-v0.2.0.zip
 # build/module/ 为可检查的暂存模块树
 
 python tools/build_lsposed.py --offline
-# outputs/HypereSIM-LSPosed-v0.1.0.apk
+# outputs/HypereSIM-LSPosed-v0.2.0.apk
 
 python tools/build_lsposed.py --offline --debug
-# outputs/HypereSIM-LSPosed-v0.1.0-debug.apk（debug 签名）
+# outputs/HypereSIM-LSPosed-v0.2.0-debug.apk（debug 签名）
 ```
 
 zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
@@ -118,8 +118,8 @@ zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
 | `workflow_dispatch` | 手动构建；勾选 `release` 才发布 |
 
 ```bash
-git tag v0.1.0
-git push origin main v0.1.0
+git tag v0.2.0
+git push origin main v0.2.0
 ```
 
 私有签名：配置仓库 secrets `HYPERESIM_KEYSTORE_BASE64`（`base64 -w0 release.jks`）、

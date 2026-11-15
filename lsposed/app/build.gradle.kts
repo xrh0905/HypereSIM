@@ -18,8 +18,8 @@ android {
         applicationId = "io.github.xrh0905.hyperesim"
         minSdk = 33
         targetSdk = 36
-        versionCode = 100
-        versionName = "v0.1.0"
+        versionCode = 200
+        versionName = "v0.2.0"
     }
 
     compileOptions {
