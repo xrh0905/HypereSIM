@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- No components: this APK is only the LSPosed module payload. -->
+    <application
+        android:allowBackup="false"
+        android:label="HypereSIM"
+        android:supportsRtl="true" />
+
+</manifest>

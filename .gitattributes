@@ -6,3 +6,19 @@ module/config text eol=lf
 module/META-INF/com/google/android/updater-script text eol=lf
 module/META-INF/com/google/android/update-binary text eol=lf
 tools/**/*.py text eol=lf
+
+# LSPosed 工程：源码与 Gradle 脚本保持 LF，wrapper jar 为二进制。
+lsposed/**/*.java text eol=lf
+lsposed/**/*.kts text eol=lf
+lsposed/**/*.xml text eol=lf
+lsposed/**/*.list text eol=lf
+lsposed/**/*.prop text eol=lf
+lsposed/gradlew text eol=lf
+lsposed/gradlew.bat text eol=crlf
+lsposed/gradle.properties text eol=lf
+lsposed/gradle/wrapper/gradle-wrapper.properties text eol=lf
+lsposed/gradle/wrapper/gradle-wrapper.jar binary
+lsposed/keystore/*.jks binary
+
+# CI
+.github/workflows/*.yml text eol=lf

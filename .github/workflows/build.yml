@@ -1,0 +1,179 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub release for this commit (tag = module version)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build module ZIP and LSPosed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 platform and build tools
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Resolve versions
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version=//p' module/module.prop)"
+          lsposed_version="$(sed -n 's/^moduleVersion=//p' lsposed/app/src/main/resources/META-INF/xposed/module.prop)"
+          if [ -z "$version" ]; then
+            echo "::error file=module/module.prop::missing version="
+            exit 1
+          fi
+          if [ "$version" != "$lsposed_version" ]; then
+            echo "::error::module/module.prop ($version) and LSPosed moduleVersion ($lsposed_version) differ"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match module version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.HYPERESIM_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.HYPERESIM_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.HYPERESIM_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.HYPERESIM_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/hyperesim-release.jks"
+          if [ -n "${KEYSTORE_BASE64}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 --decode > "$keystore"
+            echo "using HYPERESIM_KEYSTORE_BASE64"
+          else
+            cp lsposed/keystore/hyperesim-release.jks "$keystore"
+            echo "::warning title=Signing key::HYPERESIM_KEYSTORE_BASE64 is not set; signing with the committed CI key (lsposed/keystore/hyperesim-release.jks)."
+          fi
+          {
+            echo "HYPERESIM_KEYSTORE=$keystore"
+            echo "HYPERESIM_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD:-hyperesim}"
+            echo "HYPERESIM_KEY_ALIAS=${KEY_ALIAS:-hyperesim}"
+            echo "HYPERESIM_KEY_PASSWORD=${KEY_PASSWORD:-${KEYSTORE_PASSWORD:-hyperesim}}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build KernelSU zip module
+        run: python tools/build_module.py
+
+      - name: Build LSPosed APK
+        run: |
+          chmod +x lsposed/gradlew
+          python tools/build_lsposed.py --no-daemon
+
+      - name: Collect checksums
+        working-directory: outputs
+        run: |
+          set -euo pipefail
+          ls -l
+          sha256sum -- *.zip *.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperesim
+          path: outputs/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Ensure release tag is unused
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.version }}
+        run: |
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Push a tag for releases, or bump module/module.prop."
+            exit 1
+          fi
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperesim
+          path: dist
+
+      - name: Verify assets
+        run: |
+          set -euo pipefail
+          test -f "dist/HypereSIM-${{ needs.build.outputs.version }}.zip"
+          test -f "dist/HypereSIM-LSPosed-${{ needs.build.outputs.version }}.apk"
+          test -f dist/SHA256SUMS.txt
+          ls -l dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || needs.build.outputs.version }}
+          name: HypereSIM ${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/HypereSIM-*.zip
+            dist/HypereSIM-LSPosed-*.apk
+            dist/SHA256SUMS.txt
+          body: |
+            ## HypereSIM ${{ needs.build.outputs.version }}
+
+            | 资产 | 说明 |
+            | --- | --- |
+            | `HypereSIM-${{ needs.build.outputs.version }}.zip` | KernelSU / SukiSU / APatch / Magisk 模块 |
+            | `HypereSIM-LSPosed-${{ needs.build.outputs.version }}.apk` | LSPosed 行为层（libxposed API 102，静态作用域） |
+            | `SHA256SUMS.txt` | 构建产物校验和 |
+
+            安装顺序：先在 LSPosed 中启用行为层并勾选 `com.android.phone`、`com.miui.euicc`，
+            再刷入模块 zip 并重启。KernelSU / SukiSU 需启用系统挂载元模块（Hybrid Mount 或
+            meta-overlayfs）。
+
+            LPA APK 为 MIUI 官方 4.1.0.1 原样覆盖；模块 zip 内的 `config` 用 `MODE=on/off`
+            控制是否挂载 `/product`、`/vendor` 覆盖。
