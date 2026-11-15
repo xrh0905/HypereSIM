@@ -177,5 +177,5 @@ jobs:
             再刷入模块 zip 并重启。KernelSU / SukiSU 需启用系统挂载元模块（Hybrid Mount 或
             meta-overlayfs）。
 
-            LPA APK 为 MIUI 官方 4.1.0.1 原样覆盖；模块 zip 内的 `config` 用 `MODE=on/off`
-            控制是否挂载 `/product`、`/vendor` 覆盖。
+            LPA 为 MIUI 官方 4.1.0.1 与 Google 官方 D.2.1.855215241-gms 原样覆盖，两套都以
+            priv-app 特权身份安装（小米 LPA 绑定 EuiccService，Google LPA 承接 `LPA:` 激活链接）。

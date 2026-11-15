@@ -1,5 +1,8 @@
 package io.github.xrh0905.hyperesim;
 
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
 import android.util.Log;
 
 import io.github.libxposed.api.XposedInterface.Chain;
@@ -14,7 +17,7 @@ import java.util.regex.Pattern;
 /**
  * HypereSIM behaviour layer (libxposed API 102, static scope).
  *
- * <p>Only the three behaviours verified by the LSPilot plugins are implemented:
+ * <p>Only the behaviours verified on the target ROM are implemented:
  *
  * <ul>
  *   <li>H1-H4: {@code setEsimState(int)} in {@code com.android.phone} writes the Secure state
@@ -24,6 +27,9 @@ import java.util.regex.Pattern;
  *   <li>H7: {@code com.miui.euicc.profileassistant.internal.l.g()} skips the
  *       {@code EUICC_REFRESHED} wait for the first enabled profile by calling the LPA's own
  *       {@code k(true)} branch.
+ *   <li>H8: {@code ActiveStatusActivity} gets {@code ACTIVATE_CHANNEL=lpa} when the MIUI scanner
+ *       launches {@code ADD_ESIM} without it, so the activation code is used instead of falling
+ *       back to SM-DS discovery.
  * </ul>
  *
  * <p>All hooks fail open when a class or method is missing, so a ROM change degrades to stock
@@ -44,6 +50,14 @@ public final class HyperEsimModule extends XposedModule {
             "com.miui.euicc.profileassistant.internal.l";
     /** Holds the currently enabled profile; {@code c()} returns null when none is enabled. */
     private static final String LPA_PROFILE_STORE_CLASS = "q4.a";
+    /** Activation UI that validates the ADD_ESIM extras before starting a download. */
+    private static final String LPA_ACTIVATION_CLASS =
+            "com.miui.euicc.ui.active.ActiveStatusActivity";
+    private static final String ACTION_ADD_ESIM = "com.miui.euicc.action.ADD_ESIM";
+    private static final String EXTRA_ACTIVATE_CODE = "com.miui.euicc.extra.ACTIVATE_CODE";
+    private static final String EXTRA_ACTIVATE_CHANNEL = "com.miui.euicc.extra.ACTIVATE_CHANNEL";
+    /** The LPA refuses every other channel unless the referrer is the MIUI scanner. */
+    private static final String CHANNEL_LPA = "lpa";
 
     private static final int EXTERNAL_EUICC_SLOT = 1;
     private static final Pattern EID = Pattern.compile("[0-9]{32}");
@@ -60,6 +74,7 @@ public final class HyperEsimModule extends XposedModule {
             guardEsimState(loader);
             fillProductEid(loader);
         } else if (LPA_PKG.equals(pkg)) {
+            fillScannerChannel(loader);
             skipFirstProfileRefreshWait(loader);
         }
     }
@@ -157,6 +172,42 @@ public final class HyperEsimModule extends XposedModule {
             log(Log.WARN, TAG, "external EID lookup failed, keeping original getProductEid()", t);
         }
         return chain.proceed();
+    }
+
+    // ------------------------------------------------------------------- H8
+
+    /**
+     * The MIUI scanner ({@code com.xiaomi.scanner}) launches
+     * {@code com.miui.euicc.action.ADD_ESIM} with the activation code but without
+     * {@code ACTIVATE_CHANNEL}. {@code ActiveStatusActivity} rejects that with "Wrong activation
+     * channel" and falls through to SM-DS discovery, which finds no profile. Supply the channel
+     * the LPA's own scanner uses before the activity validates its intent.
+     */
+    private void fillScannerChannel(ClassLoader loader) {
+        Class<?> activity = loadClass(LPA_ACTIVATION_CLASS, loader);
+        Method onCreate = activity == null ? null : findMethod(activity, "onCreate", Bundle.class);
+        if (onCreate == null) {
+            log(Log.WARN, TAG, LPA_ACTIVATION_CLASS + "#onCreate missing, scanner fix inactive");
+            return;
+        }
+        hookMethod(onCreate, "hyperesim.lpa.scannerChannel", chain -> {
+            Object self = chain.getThisObject();
+            if (self instanceof Activity) {
+                Intent intent = ((Activity) self).getIntent();
+                if (intent != null && ACTION_ADD_ESIM.equals(intent.getAction())) {
+                    try {
+                        if (intent.getStringExtra(EXTRA_ACTIVATE_CHANNEL) == null
+                                && intent.getStringExtra(EXTRA_ACTIVATE_CODE) != null) {
+                            intent.putExtra(EXTRA_ACTIVATE_CHANNEL, CHANNEL_LPA);
+                            log(Log.INFO, TAG, "ADD_ESIM without channel -> " + CHANNEL_LPA);
+                        }
+                    } catch (Throwable t) {
+                        log(Log.WARN, TAG, "cannot patch ADD_ESIM extras", t);
+                    }
+                }
+            }
+            return chain.proceed();
+        });
     }
 
     // ------------------------------------------------------------------- H7

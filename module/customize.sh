@@ -17,14 +17,19 @@ for old_id in XiaomiEsimLPA XiaomiEsimLPAHyperOS4; do
   fi
 done
 
-# The payload and permission files are always installed. There is no version
+# The payloads and permission files are always installed. There is no version
 # gate or conditional skip: the module always shadows the product/vendor files.
-if pm list packages -3 "$LPA_PKG" 2>/dev/null | grep -qx "package:$LPA_PKG"; then
-  if ! lpa_is_updated_system; then
-    ui_print "- Removing unprivileged /data/app $LPA_PKG"
-    pm uninstall "$LPA_PKG" >/dev/null 2>&1 || true
+# A /data/app copy of either LPA shadows the module payload, and unless it is an
+# update of an already-installed system app it cannot hold the privileged
+# telephony permissions, so drop it and let the priv-app copy scan on reboot.
+for pkg in "$LPA_PKG" "$GOOGLE_PKG"; do
+  if pm list packages -3 "$pkg" 2>/dev/null | grep -qx "package:$pkg"; then
+    if ! pkg_is_updated_system "$pkg"; then
+      ui_print "- Removing unprivileged /data/app $pkg"
+      pm uninstall "$pkg" >/dev/null 2>&1 || true
+    fi
   fi
-fi
+done
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/system" 0 0 0755 0644 u:object_r:system_file:s0
@@ -34,6 +39,6 @@ done
 set_perm "$MODPATH/META-INF/com/google/android/update-binary" 0 0 0755
 
 VERSION=$(sed -n 's/^version=//p' "$MODPATH/module.prop" | head -n 1)
-ui_print "- HypereSIM ${VERSION:-unknown}: privileged LPA payload, privapp allowlist, MEP unavailable-feature."
+ui_print "- HypereSIM ${VERSION:-unknown}: MIUI + Google LPA payloads, privapp allowlists, MEP unavailable-feature."
 ui_print "- Behaviour hooks are provided by the separate LSPosed module; enable it before toggling eSIM."
 ui_print "- Reboot to activate the /product and /vendor overlays."

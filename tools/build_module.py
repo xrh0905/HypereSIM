@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the HypereSIM KernelSU zip module.
 
-The official MIUI LPA APK is tracked inside module/ (upstream layout:
-tehcneko/XiaomiEsimLPA). This script validates its identity, stages the
+Both official LPA APKs are tracked inside module/ (upstream layout:
+tehcneko/XiaomiEsimLPA). This script validates their identity, stages the
 complete module tree under build/module, and writes a reproducible ZIP under
 outputs/.
 """
@@ -21,10 +21,23 @@ from typing import NoReturn
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_SRC = ROOT / "module"
 
-# MIUI LPA 4.1.0.1, extracted unmodified from the HyperOS 4 product image.
-EXPECTED_APK_MD5 = "4bd1e9b59606f84e075afed293a9dcaa"
-APK_REL = "system/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk"
-APK_PATH = MODULE_SRC / APK_REL
+# Official LPAs, extracted unmodified from the HyperOS global image. Both are
+# required: MIUI provides EuiccService (priority 101), Google provides the LPA:
+# scheme handler and the provisioning-phase eUICC UI (priority 100).
+PAYLOADS: dict[str, dict[str, str | int]] = {
+    "system/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk": {
+        "label": "MIUI LPA 4.1.0.1",
+        "package": "com.miui.euicc",
+        "md5": "4bd1e9b59606f84e075afed293a9dcaa",
+        "size": 9096417,
+    },
+    "system/product/priv-app/EuiccGoogle/EuiccGoogle.apk": {
+        "label": "Google LPA D.2.1.855215241-gms",
+        "package": "com.google.android.euicc",
+        "md5": "11d5a706742e45d98ef6b131d4106c27",
+        "size": 16115529,
+    },
+}
 
 REQUIRED = {
     "META-INF/com/google/android/updater-script",
@@ -34,9 +47,11 @@ REQUIRED = {
     "customize.sh",
     "action.sh",
     "system/product/etc/permissions/privapp-permissions-euicc.xml",
+    "system/product/etc/permissions/privapp-permissions-euicc-google.xml",
     "system/product/etc/permissions/android.hardware.telephony.euicc.xml",
+    "system/product/etc/default-permissions/EuiccGoogle-default-permissions-google.xml",
     "system/vendor/etc/permissions/zz_hyperesim_mep.xml",
-    APK_REL,
+    *PAYLOADS,
 }
 
 EXECUTABLE = {
@@ -48,7 +63,9 @@ EXECUTABLE = {
 
 XML_FILES = {
     "system/product/etc/permissions/privapp-permissions-euicc.xml",
+    "system/product/etc/permissions/privapp-permissions-euicc-google.xml",
     "system/product/etc/permissions/android.hardware.telephony.euicc.xml",
+    "system/product/etc/default-permissions/EuiccGoogle-default-permissions-google.xml",
     "system/vendor/etc/permissions/zz_hyperesim_mep.xml",
 }
 
@@ -84,21 +101,27 @@ def read_module_prop(data: bytes) -> dict[str, str]:
     return props
 
 
-def validate_apk(apk: Path) -> None:
+def validate_apk(rel: str, spec: dict[str, str | int]) -> None:
+    apk = MODULE_SRC / rel
+    if not apk.is_file():
+        fail(f"LPA APK not found: {apk}")
     data = apk.read_bytes()
     md5 = hashlib.md5(data).hexdigest()
-    if md5 != EXPECTED_APK_MD5:
+    if md5 != spec["md5"]:
         fail(
-            f"{apk}: unexpected LPA APK (md5 {md5}, expected {EXPECTED_APK_MD5}). "
-            f"Restore {APK_REL} to the unmodified MIUI LPA 4.1.0.1."
+            f"{apk}: unexpected APK (md5 {md5}, expected {spec['md5']}). "
+            f"Restore {rel} to the unmodified {spec['label']}."
         )
+    if len(data) != spec["size"]:
+        fail(f"{apk}: unexpected size ({len(data)} B, expected {spec['size']} B).")
     try:
         with zipfile.ZipFile(apk) as zf:
             manifest = zf.read("AndroidManifest.xml")
     except (zipfile.BadZipFile, KeyError) as exc:
         fail(f"{apk}: not a valid APK: {exc}")
-    if b"com.miui.euicc" not in manifest and "com.miui.euicc".encode("utf-16le") not in manifest:
-        fail(f"{apk}: AndroidManifest.xml does not reference com.miui.euicc")
+    package = str(spec["package"])
+    if package.encode() not in manifest and package.encode("utf-16le") not in manifest:
+        fail(f"{apk}: AndroidManifest.xml does not reference {package}")
 
 
 def stage_module(stage: Path) -> None:
@@ -123,7 +146,7 @@ def collect_files(stage: Path) -> dict[str, bytes]:
 def validate_files(files: dict[str, bytes]) -> tuple[dict[str, str], dict[str, bytes]]:
     normalized: dict[str, bytes] = {}
     for rel, data in files.items():
-        normalized[rel] = data if rel == APK_REL else normalize_text(data, rel)
+        normalized[rel] = data if rel in PAYLOADS else normalize_text(data, rel)
 
     for rel in XML_FILES:
         try:
@@ -134,6 +157,18 @@ def validate_files(files: dict[str, bytes]) -> tuple[dict[str, str], dict[str, b
     privapp = normalized["system/product/etc/permissions/privapp-permissions-euicc.xml"]
     if b'package="com.miui.euicc"' not in privapp:
         fail("privapp allowlist does not target com.miui.euicc")
+    google_privapp = normalized[
+        "system/product/etc/permissions/privapp-permissions-euicc-google.xml"
+    ]
+    if b'package="com.google.android.euicc"' not in google_privapp:
+        fail("Google LPA allowlist does not target com.google.android.euicc")
+    if b"android.permission.WRITE_EMBEDDED_SUBSCRIPTIONS" not in google_privapp:
+        fail("Google LPA allowlist does not grant WRITE_EMBEDDED_SUBSCRIPTIONS")
+    default_perms = normalized[
+        "system/product/etc/default-permissions/EuiccGoogle-default-permissions-google.xml"
+    ]
+    if b'package="com.google.android.euicc"' not in default_perms:
+        fail("default-permissions file does not target com.google.android.euicc")
     mep = normalized["system/vendor/etc/permissions/zz_hyperesim_mep.xml"]
     if b'<unavailable-feature name="android.hardware.telephony.euicc.mep"' not in mep:
         fail("MEP overlay does not disable android.hardware.telephony.euicc.mep")
@@ -161,11 +196,9 @@ def main() -> None:
     parser.add_argument("--stage", type=Path, default=ROOT / "build" / "module", help="unpacked staging directory")
     args = parser.parse_args()
 
-    apk = APK_PATH
-    if not apk.is_file():
-        fail(f"LPA APK not found: {apk}")
+    for rel, spec in PAYLOADS.items():
+        validate_apk(rel, spec)
 
-    validate_apk(apk)
     stage_module(args.stage)
     files = collect_files(args.stage)
     props, files = validate_files(files)
@@ -175,7 +208,8 @@ def main() -> None:
     out = args.out or (ROOT / "outputs" / f"HypereSIM-{props['version']}.zip")
     write_zip(files, out)
 
-    print(f"apk     : {apk} (md5 {EXPECTED_APK_MD5})")
+    for rel, spec in PAYLOADS.items():
+        print(f"apk     : {rel} (md5 {spec['md5']}, {spec['size']} B)")
     print(f"stage   : {args.stage}")
     print(f"zip     : {out} ({out.stat().st_size} bytes, {len(files)} entries)")
     print(f"sha256  : {hashlib.sha256(out.read_bytes()).hexdigest()}")
