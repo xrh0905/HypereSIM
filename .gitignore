@@ -1,9 +1,8 @@
-# 本地产物：反编译结果、二进制与上游克隆（体积大、可由 work/MIUIEsimLPA.apk 重建）
-/work/MIUIEsimLPA.apk
-/work/jadx/
-/work/analysis/
-/work/prior/out-lpa-4.0.2.1/
-/work/repo/
+# 本地产物：反编译结果、取证资料与上游克隆，不随仓库发布（仅本地保留）
+/work/
+/docs/lpa/
+/docs/module-plan.md
+/tools/check_evidence.py
 
 # Python
 __pycache__/

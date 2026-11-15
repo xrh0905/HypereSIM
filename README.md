@@ -1,95 +1,154 @@
 # HypereSIM
 
-Xiaomi HyperOS 4（Android 15–17）可拆卸 eUICC 系统托管：KernelSU/SukiSU/APatch/Magisk 模块实现。
+Xiaomi HyperOS 4（Android 15–17）可拆 eUICC（实体 eSIM 卡）系统托管模块。
 
-## 内容
+面向 **Xiaomi 14 等“海外版存在 eSIM 型号”的小米机型**：这些机型的系统默认具备 eSIM 能力、
+并启用 MEP，插上可拆 eUICC 后，系统 eSIM 开关会真的调用 `setSimType` 把 SIM2 切走；
+仅部署 LPA APK 的传统模块因此不工作。HypereSIM 在部署官方 LPA 的同时，用最小范围的
+LSPosed hook 截断切卡、补齐 EID、修掉首个 profile 的刷新等待。
 
-| 路径 | 说明 |
-| --- | --- |
-| `module/` | KernelSU zip 模块源文件：LPA payload、privapp 权限、`telephony.euicc` 特性、MEP 禁用、诊断脚本 |
-| `lsposed/` | LSPosed 行为层（libxposed API 102，静态作用域 `com.android.phone` + `com.miui.euicc`）：切卡拦截、EID、首个 profile 刷新等待；无 Activity/资源 |
-| `tools/build_module.py` | 构建完整 zip（校验官方 APK → 暂存 `build/module/` → 输出 `outputs/HypereSIM-*.zip`） |
-| `tools/build_lsposed.py` | 构建并校验 LSPosed APK（Gradle wrapper → 校验 `META-INF/xposed`、入口类、清单 → 输出 `outputs/HypereSIM-LSPosed-*.apk`） |
-| `docs/lpa/` | 小米原生 LPA `com.miui.euicc` 4.1.0.1 的完整逆向记录（组件、ES10/ES9+、profile 生命周期、MEP 双路线、门禁与特权、端口模型） |
-| `docs/module-plan.md` | HypereSIM 模块实现计划（结构、脚本、路线选择、验证矩阵、风险） |
-| `module/system/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk` | 随仓库入库的官方未修改 LPA 4.1.0.1（9,096,417 B，md5 `4bd1e9b59606f84e075afed293a9dcaa`），仿上游 `tehcneko/XiaomiEsimLPA` 布局 |
-| `work/MIUIEsimLPA.apk` | 分析目标（与 `module/` 内同一份 APK） |
-| `work/jadx/sources/` | jadx 1.5.6 反编译源码（5,030 个 java 文件） |
-| `work/prior/` | 前序成果：设备实测报告、LSPilot 插件、v5 模块、4.0.2.1 反编译 |
-| `work/repo/` | 上游模块工程（XiaomiEsimLPA v0.6.1）；仅作 `libxposed` 工程外形参考，**不作为实现依据** |
-| `tools/check_evidence.py` | 文档 `文件:行` 引用校验器（`python tools/check_evidence.py`） |
+## 背景
 
-## 构建 zip 模块
+传统 LPA 模块（把 `MIUIEsimLPA.apk` 放进 `/product/priv-app` 并授予特权）解决的是
+“系统没有 eSIM 管理能力”。Xiaomi 14 这类机型不同：
+
+- 同型号海外版带 eSIM，HyperOS 4 固件因此保留 eSIM 能力与 MEP 适配；
+- 开启 eSIM 会走 `setEsimState → IExtTelephony.setSimType`，把 SIM2 从物理卡切成 eSIM，
+  可拆 eUICC 紧接着掉卡，开关又退回关闭；
+- LPA 的 `getProductEid()` 读内置 eUICC 的 NV，外置卡机型上为空，`*#06#` 无 EID；
+- 无已启用 profile 时，LPA 等 `EUICC_REFRESHED` 广播，但可拆卡不会产生这个状态变化，
+  首次启用会卡在“正在启用 eSIM 卡…”。
+
+这些都属于行为层差异，不是 APK 或权限问题。HypereSIM 只针对这三点做修复。
+
+## 组成
+
+| 部分 | 负责 | 不负责 |
+| --- | --- | --- |
+| `module/`（KernelSU zip） | 部署官方 LPA 到 `/product/priv-app`；privapp 权限白名单；声明 `telephony.euicc` 特性；用 `<unavailable-feature>` 关闭 `telephony.euicc.mep`；启动/操作按钮诊断 | 不写 `Settings.Secure`，不携带 LSPosed APK，不改 vendor 原声明 |
+| `lsposed/`（行为层） | 3 组最小 hook：切卡拦截、外置 EID、首个 profile 跳过刷新等待 | 无 Activity/资源；不 hook `hasSystemFeature`；不碰 MEP |
+
+MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.android.phone`、
+`com.miui.euicc` 中运行（libxposed API 102）。
+
+## Hook 范围
+
+| # | 行为 | 说明 |
+| --- | --- | --- |
+| 1 | eSIM 状态设置入口 | 拦截 `setEsimState` / `setEsimStateEx`，只翻转系统状态位并返回成功；不进入原方法、不调用 `setSimType`、不切 modem |
+| 2 | EID 查询入口 | `getProductEid()` 改读 SIM2 槽位；取不到 32 位 EID 时回退原逻辑 |
+| 3 | 首个 profile 启用 | 尚无已启用 profile 时走 LPA 自带的跳过分支，不再等待 `EUICC_REFRESHED` |
+
+设计约束：
+
+- 只 hook 上述方法与签名；类或方法缺失时直接跳过，保持原厂行为，不阻断电话功能。
+- 不做 MEP 判定改写、OMAPI 桥、卡信息伪造、UI/资源改写、双驻留等扩展。
+- 不做 `pSimToESim`：单端口可拆 eUICC 上该路径物理上不可行。
+
+## 环境要求
+
+- 小米 HyperOS 4 / Android 15+（SDK 35+）；低版本仅提示，不阻止安装。
+- KernelSU / SukiSU / APatch / Magisk 任一。
+- KernelSU/SukiSU 需启用系统挂载元模块（**Hybrid Mount** 或 **meta-overlayfs**），
+  否则 `/product` 覆盖不生效。
+- LSPosed（支持 libxposed API 102）。
+- 可拆 eUICC 放在 SIM2。
+
+## 安装
+
+1. KernelSU/SukiSU：先安装并启用 Hybrid Mount 或 meta-overlayfs，重启。
+2. 刷入 `HypereSIM-<version>.zip`。
+3. 安装 `HypereSIM-LSPosed-<version>.apk`，在 LSPosed 中启用模块，勾选
+   `com.android.phone` 与 `com.miui.euicc`。
+4. 重启。
+5. 在系统设置中打开 eSIM，正常写卡/启用 profile。
+
+升级 zip 与 APK 时保持两者版本一致。卸载 zip 模块会移除 `/product`、`/vendor` 覆盖；
+`uninstall.sh` 只清理 `/data/adb/hyperesim` 诊断目录，不改 `Settings.Secure`，不删 profile，
+也不卸载 LSPosed 模块。
+
+## 模式与诊断
+
+`module/config` 的 `MODE=on|off` 控制 `skip_mount`：
+
+- `on`（默认）：应用 `/product`、`/vendor` 覆盖。
+- `off`：下次启动不挂载任何覆盖，便于对比原厂行为。
+
+诊断入口：
+
+- Root 管理器的模块 Action 按钮：打印 LPA 路径、版本、`SYSTEM` 标志、eUICC 特性、
+  近期 `Euicc-` 日志。
+- `/data/adb/hyperesim/last.log`：`service.sh` 在开机完成后写入的只读快照。
+
+## 构建
 
 ```bash
 python tools/build_module.py
-# 输出：outputs/HypereSIM-v0.1.0.zip
-# 暂存：build/module/（完整可检查的模块树）
-```
+# outputs/HypereSIM-v0.1.0.zip
+# build/module/ 为可检查的暂存模块树
 
-构建直接使用模块源树中的 `module/system/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk`
-（仿照上游 `tehcneko/XiaomiEsimLPA` 的布局，APK 随仓库入库）。脚本会强校验 md5
-`4bd1e9b59606f84e075afed293a9dcaa` 与 APK 内的 `com.miui.euicc` 清单，避免误打包其他版本。
-模块内 `config` 的 `MODE=on/off` 控制 `skip_mount`：`off` 时不挂载任何 `/product`、`/vendor` 覆盖。
-
-安装顺序：先在 LSPosed 中启用行为层模块并勾选 `com.android.phone`、`com.miui.euicc`，
-再刷入本 zip 并重启。KernelSU/SukiSU 必须启用系统挂载元模块（Hybrid Mount 或
-meta-overlayfs）；模块不写 `Settings.Secure`，也不安装 LSPosed APK。
-
-## 构建 LSPosed 模块
-
-```bash
 python tools/build_lsposed.py --offline
-# 输出：outputs/HypereSIM-LSPosed-v0.1.0.apk
+# outputs/HypereSIM-LSPosed-v0.1.0.apk
 
 python tools/build_lsposed.py --offline --debug
-# 输出：outputs/HypereSIM-LSPosed-v0.1.0-debug.apk（debug 签名，可调试）
-# 工程：lsposed/（Gradle wrapper 8.14.3 + AGP 8.12.0 + libxposed API 102.0.0）
+# outputs/HypereSIM-LSPosed-v0.1.0-debug.apk（debug 签名）
 ```
 
-`--offline` 使用本机 Gradle 缓存；首次构建需要网络拉取依赖。release 构建默认使用仓库内
-`lsposed/keystore/hyperesim-release.jks`（alias 与密码均为 `hyperesim`），与 CI 产物签名一致；
-可用 `HYPERESIM_KEYSTORE`、`HYPERESIM_KEYSTORE_PASSWORD`、`HYPERESIM_KEY_ALIAS`、
-`HYPERESIM_KEY_PASSWORD` 覆盖。`--debug` 构建固定使用 Android debug keystore。
+zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
+9,096,417 B，md5 `4bd1e9b59606f84e075afed293a9dcaa`；不一致直接失败，避免误打包其他版本。
 
-## CI 与发布
+`--offline` 使用本机 Gradle 缓存；首次构建需联网拉依赖。release 默认使用
+`lsposed/keystore/hyperesim-release.jks`（alias 与密码均为 `hyperesim`），保证本地与 CI
+签名一致、APK 可覆盖升级；可用 `HYPERESIM_KEYSTORE`、`HYPERESIM_KEYSTORE_PASSWORD`、
+`HYPERESIM_KEY_ALIAS`、`HYPERESIM_KEY_PASSWORD` 覆盖。该密钥公开，只用于签名一致性，
+不构成安全边界。
 
-`.github/workflows/build.yml` 三档触发：
-
-| 触发 | 行为 |
-| --- | --- |
-| push `main` / PR | 构建 zip + APK，上传 `hyperesim` artifact，不发布 |
-| push `v*` tag | 构建后创建 GitHub Release，附 `HypereSIM-<version>.zip`、`HypereSIM-LSPosed-<version>.apk`、`SHA256SUMS.txt` |
-| `workflow_dispatch` | 手动构建；勾选 `release` 才发布（tag 名取 `module/module.prop` 的 `version`，已存在则失败） |
-
-版本号必须三处一致，tag 名必须等于 `version`：
+版本号必须三处一致：
 
 1. `module/module.prop`：`version` / `versionCode`
 2. `lsposed/app/build.gradle.kts`：`versionName` / `versionCode`
 3. `lsposed/app/src/main/resources/META-INF/xposed/module.prop`：`moduleVersion` / `moduleVersionCode`
 
-CI 默认用入库的 `lsposed/keystore/hyperesim-release.jks`（alias 与密码均为 `hyperesim`）签名，
-保证每次构建签名一致、APK 可直接覆盖升级。该密钥公开，只用于签名一致性、不构成安全边界；
-需要私有密钥时配置仓库 secrets：`HYPERESIM_KEYSTORE_BASE64`（`base64 -w0 release.jks`）、
-`HYPERESIM_KEYSTORE_PASSWORD`、`HYPERESIM_KEY_ALIAS`、`HYPERESIM_KEY_PASSWORD`（可选）。
+## CI 与发布
+
+`.github/workflows/build.yml`：
+
+| 触发 | 行为 |
+| --- | --- |
+| push `main` / PR | 构建 zip + APK，上传 `hyperesim` artifact，不发布 |
+| push `v*` tag | 校验 tag 与 `version` 一致，构建后创建 Release，附 zip、APK、`SHA256SUMS.txt` |
+| `workflow_dispatch` | 手动构建；勾选 `release` 才发布 |
 
 ```bash
 git tag v0.1.0
-git push origin main v0.1.0   # tag 触发构建 + Release
+git push origin main v0.1.0
 ```
 
-## 快速结论
+私有签名：配置仓库 secrets `HYPERESIM_KEYSTORE_BASE64`（`base64 -w0 release.jks`）、
+`HYPERESIM_KEYSTORE_PASSWORD`、`HYPERESIM_KEY_ALIAS`、`HYPERESIM_KEY_PASSWORD`。
 
-- 两条路线由 `v3.b.d()`（平台 `…euicc.mep` 特性 **或** 内置不可拆 eUICC 的 MEP 能力）决定：
-  MEP → 框架 `EuiccCardManager`；非 MEP → LPA 自建通道 + 自拼 CAPDU。详见 `docs/lpa/04-mep-vs-nonmep.md`。
-- 模块用文件级 `<unavailable-feature name="android.hardware.telephony.euicc.mep"/>` 统一收口到非 MEP，
-  重启生效，不改 vendor 原声明。MEP 只由 zip 模块负责，LSPosed 不重复 hook `hasSystemFeature`。
-- 行为层只移植 LSPilot 已验证的 3 组 hook，由独立 LSPosed 模块
-  `io.github.xrh0905.hyperesim`（API 102，静态作用域）执行：
-  1. `setEsimState → IExtTelephony.setSimType` 切卡（只翻状态位，不碰 modem）；
-  2. `getProductEid()` 读内置 NV 导致 `*#06#` 为空（改读槽 1 外置 EID）；
-  3. 无已启用 profile 时 `l.g()` 等不到 `EUICC_REFRESHED` 导致启用卡死（走 `k(true)` 分支）。
-- KernelSU zip 模块只负责部署：把官方 LPA 覆盖到 `/product/priv-app`、覆盖
-  `privapp-permissions-euicc.xml` 与 `telephony.euicc` 特性、挂载 `<unavailable-feature>`
-  禁用 MEP。**不写 `is_enable_esim_for_user`，不携带 LSPosed APK**；启用 eSIM 直接在设置里
-  打开，由 LSPosed hook 保证不切卡。
+## 仓库结构
+
+| 路径 | 说明 |
+| --- | --- |
+| `module/` | KernelSU zip 模块源文件：LPA payload、privapp 权限、`telephony.euicc` 特性、MEP 禁用、安装/启动/诊断脚本 |
+| `lsposed/` | LSPosed 行为层工程（Gradle wrapper + libxposed API 102） |
+| `tools/build_module.py` | 构建并校验 zip |
+| `tools/build_lsposed.py` | 构建并校验 LSPosed APK |
+| `module/system/product/priv-app/MIUIEsimLPA/MIUIEsimLPA.apk` | 随仓库入库的官方未修改 LPA 4.1.0.1 |
+
+逆向分析、真机取证与历史参考资料仅本地保留，不随仓库发布。
+
+## 鸣谢
+
+- [jabe1122/HyperOS4-ESTKme-eSIM-LPA](https://github.com/jabe1122/HyperOS4-ESTKme-eSIM-LPA)：
+  提供官方未修改 `MIUIEsimLPA.apk`（4.1.0.1）与 HyperOS 4 实体 eSIM 真机结论。
+  HypereSIM 不采用其 OMAPI 桥、卡信息伪造、UI 改写与双驻留方案。
+- [tehcneko/XiaomiEsimLPA](https://github.com/tehcneko/XiaomiEsimLPA)：
+  模块目录布局与 `priv-app` + 权限白名单思路的上游参考。
+
+## 免责声明
+
+非官方模块，与小米、LSPosed、上述上游作者无隶属关系。刷机、改系统分区有变砖与丢卡风险；
+先在可恢复的设备上验证。模块不会写入 eUICC profile，也不会修改 `Settings.Secure`，但下载/
+切换 profile 的行为仍取决于运营商、eUICC 与 LPA 本身。
