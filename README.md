@@ -62,6 +62,9 @@ MEP 只由 zip 模块收口到非 MEP。LSPosed 仅在静态作用域 `com.andro
    `com.android.phone` 与 `com.miui.euicc`。
 4. 重启。
 5. 在系统设置中打开 eSIM，正常写卡/启用 profile。
+6. `LPA:1$...` 激活链接由 APK 内的 `LpaBridgeActivity` 转交小米 LPA；该 ROM 上 Google
+   `com.google.android.euicc` 会抢占 `LPA` scheme 且因缺少特权电话权限崩溃，建议
+   `pm disable-user --user 0 com.google.android.euicc`。
 
 升级 zip 与 APK 时保持两者版本一致。卸载 zip 模块会移除 `/product`、`/vendor` 覆盖与
 `system.prop`，不改 `Settings.Secure`，不删 profile，也不卸载 LSPosed 模块。
@@ -89,7 +92,7 @@ python tools/build_lsposed.py --offline
 # outputs/HypereSIM-LSPosed-<version>.apk
 
 python tools/build_lsposed.py --offline --debug
-# outputs/HypereSIM-LSPosed-v1.0.0-debug.apk（debug 签名）
+# outputs/HypereSIM-LSPosed-v1.1.0-debug.apk（debug 签名）
 ```
 
 zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
@@ -118,8 +121,8 @@ zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
 | `workflow_dispatch` | 手动构建；勾选 `release` 才发布 |
 
 ```bash
-git tag v1.0.0
-git push origin main v1.0.0
+git tag v1.1.0
+git push origin main v1.1.0
 ```
 
 私有签名：配置仓库 secrets `HYPERESIM_KEYSTORE_BASE64`（`base64 -w0 release.jks`）、

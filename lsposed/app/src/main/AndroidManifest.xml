@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No components: this APK is only the LSPosed module payload. -->
+    <!-- Body of the LSPosed module plus the one component that needs to exist as an app: a
+         handler for LPA: activation links, which this ROM otherwise routes to Google's
+         non-privileged eSIM app. -->
     <application
         android:allowBackup="false"
         android:label="HypereSIM"
-        android:supportsRtl="true" />
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".LpaBridgeActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="LPA" />
+                <data android:scheme="lpa" />
+            </intent-filter>
+        </activity>
+    </application>
 
 </manifest>
