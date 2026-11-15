@@ -8,5 +8,7 @@
         <permission name="android.permission.BIND_EUICC_SERVICE" />
         <permission name="android.permission.SECURE_ELEMENT_PRIVILEGED_OPERATION" />
         <permission name="android.permission.USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER" />
+        <permission name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+        <permission name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
     </privapp-permissions>
 </permissions>

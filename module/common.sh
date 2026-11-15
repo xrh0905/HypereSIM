@@ -35,8 +35,10 @@ lpa_path() {
 }
 
 lpa_flags() {
+  # Only pkgFlags carries the SYSTEM flag; the earlier flags=0x0 line is the
+  # install-state bitmask and never contains it.
   dumpsys package "$LPA_PKG" 2>/dev/null \
-    | grep -m 1 -E '^[[:space:]]*(pkgFlags|flags)=' \
+    | grep -m 1 -E '^[[:space:]]*pkgFlags=' \
     | sed 's/^[[:space:]]*//'
 }
 
