@@ -89,7 +89,7 @@ python tools/build_lsposed.py --offline
 # outputs/HypereSIM-LSPosed-<version>.apk
 
 python tools/build_lsposed.py --offline --debug
-# outputs/HypereSIM-LSPosed-v0.2.0-debug.apk（debug 签名）
+# outputs/HypereSIM-LSPosed-v1.0.0-debug.apk（debug 签名）
 ```
 
 zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
@@ -118,8 +118,8 @@ zip 构建会强校验随仓库入库的官方 LPA：`com.miui.euicc` 4.1.0.1，
 | `workflow_dispatch` | 手动构建；勾选 `release` 才发布 |
 
 ```bash
-git tag v0.2.0
-git push origin main v0.2.0
+git tag v1.0.0
+git push origin main v1.0.0
 ```
 
 私有签名：配置仓库 secrets `HYPERESIM_KEYSTORE_BASE64`（`base64 -w0 release.jks`）、

@@ -1,6 +1,6 @@
 id=hyperesim
 name=HypereSIM
-version=v0.2.0
-versionCode=200
+version=v1.0.0
+versionCode=1000
 author=xrh0905
 description=HyperOS 4 removable eUICC support: official Xiaomi LPA as a privileged product app, privapp permission allowlist, and telephony.euicc.mep marked unavailable. Behaviour hooks ship as a separate LSPosed module.
